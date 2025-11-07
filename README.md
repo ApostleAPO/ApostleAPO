@@ -6,6 +6,7 @@
 <p align="left"> <a href="https://github.com/ryo-ma/github-profile-trophy"><img src="https://github-profile-trophy.vercel.app/?username=apostleapo" alt="apostleapo" /></a> </p>
 
 <h3 align="left">Connect with me:</h3>
+<p>morarudenis54@gmail.com</p>
 <p align="left">
 </p>
 
