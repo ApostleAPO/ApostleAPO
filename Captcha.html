@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Captcha Infinito - Immagini Impossibili</title>
+<style>
+  :root{
+    --bg:#0f1724;
+    --card:#0b1220;
+    --accent:#7dd3fc;
+    --muted:#94a3b8;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,var(--bg),#061027);color:#e6eef8}
+  .app {max-width:980px;margin:36px auto;padding:20px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow: 0 8px 30px rgba(2,6,23,0.6);}
+  h1{margin:0 0 8px;font-size:20px;color:var(--accent)}
+  p.lead{margin:0 0 18px;color:var(--muted)}
+  .targetBox{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .targetPreview{width:72px;height:72px;border-radius:8px;background:linear-gradient(180deg,#081226,#07101b);display:flex;align-items:center;justify-content:center;box-shadow: 0 4px 14px rgba(2,6,23,0.6);}
+  .targetLabel{font-size:14px;color:#bfe8ff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-top:12px}
+  .tile{background:var(--card);border-radius:10px;padding:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;transition:transform .12s ease, box-shadow .12s ease;}
+  .tile:hover{transform:translateY(-6px);box-shadow:0 8px 30px rgba(13,30,48,0.6);}
+  .tile.selected{outline:3px solid rgba(125,211,252,0.18);box-shadow:0 12px 40px rgba(13,30,48,0.8);transform:translateY(-8px) scale(1.02);}
+  .feedback{height:28px;margin-top:12px;font-weight:600}
+  .controls{display:flex;gap:10px;align-items:center;margin-top:14px}
+  button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--accent);padding:8px 12px;border-radius:10px;cursor:pointer}
+  .small{font-size:13px;color:var(--muted)}
+  .seed{font-family:monospace;color:#9be7ff}
+  footer{margin-top:18px;font-size:12px;color:var(--muted)}
+  svg{width:100%;height:100%}
+</style>
+</head>
+<body>
+  <div class="app" role="main" aria-labelledby="title">
+    <h1 id="title">Captcha Infinito — Immagini Impossibili</h1>
+    <p class="lead">Seleziona tutte le immagini del tipo richiesto. Ogni risposta corretta genera una nuova sfida.</p>
+
+    <div class="targetBox">
+      <div class="targetPreview" id="targetPreview" aria-hidden="true"></div>
+      <div>
+        <div class="targetLabel">Trova tutte le: <span id="targetName" style="font-weight:700"></span></div>
+        <div class="small">Difficoltà: <span id="difficultyLabel">media</span> • Seed: <span class="seed" id="seedLabel">—</span></div>
+      </div>
+    </div>
+
+    <div class="grid" id="grid" role="list" aria-label="griglia di immagini"></div>
+
+    <div class="feedback" id="feedback" aria-live="polite"></div>
+
+    <div class="controls">
+      <button id="skipBtn">Salta (nuova sfida)</button>
+      <button id="resetBtn">Reimposta selezioni</button>
+      <label class="small">Numero immagini:
+        <select id="countSelect">
+          <option value="6">6</option>
+          <option value="9" selected>9</option>
+          <option value="12">12</option>
+          <option value="16">16</option>
+        </select>
+      </label>
+      <label class="small">Difficoltà:
+        <select id="difficultySelect">
+          <option value="easy">facile</option>
+          <option value="medium" selected>media</option>
+          <option value="hard">difficile</option>
+        </select>
+      </label>
+    </div>
+
+    <footer>Demo: generatore di immagini SVG "impossibili". Non usare come unica protezione anti-bot.</footer>
+  </div>
+
+<script>
+(() => {
+  // --- utilities
+  function randInt(min,max){return Math.floor(Math.random()*(max-min+1))+min}
+  function choose(arr){return arr[randInt(0,arr.length-1)]}
+  function seededRandom(seed){
+    // simple xorshift32-ish PRNG
+    let x = Math.abs(seed|0) || 123456789;
+    return () => {
+      x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+      return ((x >>> 0) / 4294967295);
+    };
+  }
+
+  // --- SVG generators for "impossible" shapes and distractors
+  // Each returns an SVG string sized to viewbox 0 0 100 100
+  function svgPenroseTriangle(variant = {}) {
+    const r = variant.rotate || 0;
+    const stroke = variant.stroke || 6;
+    const fill = variant.fill || 'none';
+    // Simplified stylized Penrose-like triangle made from 3 thick bands (visual illusion)
+    return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Penrose triangle">
+      <g transform="translate(50,50) rotate(${r})">
+        <g transform="translate(-50,-50)">
+          <defs>
+            <linearGradient id="g1" x1="0" x2="1">
+              <stop offset="0" stop-color="#7dd3fc" stop-opacity="0.95"/>
+              <stop offset="1" stop-color="#0369a1" stop-opacity="0.95"/>
+            </linearGradient>
+          </defs>
+          <path d="M50 12 L86 75 L14 75 Z" fill="${fill}" stroke="url(#g1)" stroke-width="${stroke}" stroke-linejoin="round" stroke-linecap="round"/>
+          <!-- inner cut to mimic impossible joining -->
+          <path d="M50 28 L74 70 L26 70 Z" fill="#071b2a" opacity="0.82"/>
+        </g>
+      </g>
+    </svg>`;
+  }
+
+  function svgImpossibleCube(variant={}) {
+    const r = variant.rotate || 0;
+    return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Impossible cube">
+      <g transform="translate(50,50) rotate(${r})">
+        <g transform="translate(-50,-50)" stroke-linejoin="round" stroke-linecap="round">
+          <defs>
+            <linearGradient id="g2" x1="0" x2="1">
+              <stop offset="0" stop-color="#fda4af"/>
+              <stop offset="1" stop-color="#be185d"/>
+            </linearGradient>
+          </defs>
+          <path d="M30 25 L60 10 L90 25 L60 40 Z" fill="url(#g2)" stroke="#000" stroke-opacity="0.12"/>
+          <path d="M30 25 L30 65 L60 80 L60 40 Z" fill="#07101a" opacity="0.75"/>
+          <path d="M90 25 L90 65 L60 80 L60 40 Z" fill="#0b2740" opacity="0.65"/>
+          <!-- crossing edges to create impossibility -->
+          <line x1="30" y1="25" x2="60" y2="40" stroke="#000" stroke-opacity="0.12"/>
+          <line x1="90" y1="25" x2="60" y2="40" stroke="#000" stroke-opacity="0.12"/>
+        </g>
+      </g>
+    </svg>`;
+  }
+
+  function svgNormalTriangle(variant={}) {
+    const r = variant.rotate || 0;
+    const fill = variant.fill || '#8b5cf6';
+    return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="triangolo normale">
+      <g transform="translate(50,50) rotate(${r})">
+        <polygon points="0,-36 31,36 -31,36" fill="${fill}" />
+      </g>
+    </svg>`;
+  }
+
+  function svgSquare(variant={}) {
+    const r = variant.rotate || 0;
+    const fill = variant.fill || '#34d399';
+    return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="quadrato">
+      <g transform="translate(50,50) rotate(${r})">
+        <rect x="-28" y="-28" width="56" height="56" rx="6" fill="${fill}" />
+      </g>
+    </svg>`;
+  }
+
+  // More shapes can be added here following same pattern.
+
+  // --- Configuration
+  const shapePool = [
+    {id:'penrose', label:'Penrose triangle', render: svgPenroseTriangle, weight:1},
+    {id:'cube', label:'Impossible cube', render: svgImpossibleCube, weight:1},
+    {id:'triangle', label:'Triangolo', render: svgNormalTriangle, weight:1.5},
+    {id:'square', label:'Quadrato', render: svgSquare, weight:1.5},
+  ];
+
+  // --- Main captcha engine
+  const gridEl = document.getElementById('grid');
+  const targetPreview = document.getElementById('targetPreview');
+  const targetName = document.getElementById('targetName');
+  const feedback = document.getElementById('feedback');
+  const seedLabel = document.getElementById('seedLabel');
+  const difficultyLabel = document.getElementById('difficultyLabel');
+
+  let current = {seed:Date.now() % 1000000, rng: null, targetId: null, tiles: [], selections: new Set(), options:{}};
+
+  function chooseTarget(rng, difficulty) {
+    // difficulty influences chance to pick an "impossible" shape vs distractor
+    const impossible = ['penrose','cube'];
+    const distractor = ['triangle','square'];
+    let pool = shapePool.map(s=>s.id);
+    // weight selection by difficulty: hard -> target is more ambiguous (could be normal shape)
+    if(difficulty === 'easy') {
+      // target likely an impossible one
+      return rng()<0.75 ? choose(impossible) : choose(pool);
+    } else if (difficulty === 'medium') {
+      return rng()<0.55 ? choose(impossible) : choose(pool);
+    } else {
+      return rng()<0.4 ? choose(impossible) : choose(pool);
+    }
+  }
+
+  function buildChallenge(seed, count=9, difficulty='medium') {
+    current.seed = seed|0;
+    current.rng = seededRandom(current.seed);
+    current.options = {count, difficulty};
+    current.targetId = chooseTarget(current.rng, difficulty);
+    seedLabel.textContent = current.seed;
+    difficultyLabel.textContent = difficulty;
+    // decide how many target instances to include (1..3 depending on size)
+    const maxTargets = Math.min(3, Math.max(1, Math.floor(count/6)));
+    const numTargets = 1 + Math.floor(current.rng() * maxTargets);
+    const tiles = [];
+
+    // Build list of tile types ensuring exactly numTargets of targetId
+    const availableIds = shapePool.map(s=>s.id);
+    // Add target entries
+    for(let i=0;i<numTargets;i++){ tiles.push(current.targetId); }
+    // Fill rest with random picks (could include same id again)
+    while(tiles.length < count) {
+      const pick = availableIds[Math.floor(current.rng() * availableIds.length)];
+      tiles.push(pick);
+    }
+    // shuffle
+    for(let i=tiles.length-1;i>0;i--){
+      const j = Math.floor(current.rng()*(i+1));
+      [tiles[i],tiles[j]] = [tiles[j],tiles[i]];
+    }
+
+    // build tile objects with style variants
+    current.tiles = tiles.map((id, idx) => {
+      const shapeDef = shapePool.find(s=>s.id===id);
+      // variant randomization
+      const rot = Math.floor(current.rng()*360);
+      const stroke = 5 + Math.floor(current.rng()*4);
+      const fillColors = ['#7dd3fc','#fda4af','#8b5cf6','#34d399','#fbbf24','#fb7185'];
+      const fill = choose(fillColors);
+      return {
+        id,
+        index: idx,
+        svg: shapeDef.render({rotate:rot, stroke, fill}),
+        label: shapeDef.label,
+      };
+    });
+
+    // update UI target preview and label
+    const targetDef = shapePool.find(s=>s.id===current.targetId);
+    targetPreview.innerHTML = targetDef.render({rotate: randInt(0,360)});
+    targetName.textContent = targetDef.label;
+    // render grid
+    renderGrid();
+    // reset selections & feedback
+    current.selections = new Set();
+    feedback.textContent = '';
+  }
+
+  function renderGrid(){
+    gridEl.innerHTML = '';
+    current.tiles.forEach(t => {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.index = t.index;
+      tile.dataset.id = t.id;
+      tile.setAttribute('role','listitem');
+      tile.setAttribute('aria-label', t.label);
+      tile.innerHTML = t.svg;
+      tile.addEventListener('click', onTileClick);
+      gridEl.appendChild(tile);
+    });
+  }
+
+  function onTileClick(e){
+    const el = e.currentTarget;
+    const idx = Number(el.dataset.index);
+    if(current.selections.has(idx)){
+      current.selections.delete(idx);
+      el.classList.remove('selected');
+    } else {
+      current.selections.add(idx);
+      el.classList.add('selected');
+    }
+    // instant-check mode: if number of selected equals number of targets, verify
+    const totalTargets = current.tiles.filter(t=>t.id===current.targetId).length;
+    if(current.selections.size >= totalTargets) {
+      verify();
+    }
+  }
+
+  function verify(){
+    const selectedIdxs = Array.from(current.selections);
+    const wrong = selectedIdxs.some(i => current.tiles[i].id !== current.targetId);
+    const allTargets = current.tiles.map((t,i)=>t.id===current.targetId ? i : -1).filter(i=>i>=0);
+    const missed = allTargets.some(i => !current.selections.has(i));
+    if(!wrong && !missed){
+      // success
+      feedback.style.color = '#a7f3d0';
+      feedback.textContent = 'Corretto — generazione nuova sfida...';
+      // brief delay then new challenge (infinite)
+      setTimeout(() => {
+        buildChallenge((current.seed + Math.floor(Math.random()*9999)) % 1000000, current.options.count, current.options.difficulty);
+      }, 650);
+    } else {
+      feedback.style.color = '#fca5a5';
+      if(wrong) feedback.textContent = 'Hai selezionato almeno un elemento sbagliato. Riprova.';
+      else if (missed) feedback.textContent = 'Manca almeno un elemento corretto. Continua a selezionare.';
+    }
+  }
+
+  // --- controls dif in progess low-max
+  document.getElementById('skipBtn').addEventListener('click', ()=>{
+    buildChallenge(Math.floor(Math.random()*1000000), Number(document.getElementById('countSelect').value), document.getElementById('difficultySelect').value);
+  });
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    current.selections = new Set();
+    document.querySelectorAll('.tile.selected').forEach(t=>t.classList.remove('selected'));
+    feedback.textContent = '';
+  });
+  document.getElementById('countSelect').addEventListener('change', (e)=>{
+    buildChallenge(current.seed ^ Math.floor(Math.random()*10007), Number(e.target.value), document.getElementById('difficultySelect').value);
+  });
+  document.getElementById('difficultySelect').addEventListener('change', (e)=>{
+    buildChallenge(current.seed ^ Math.floor(Math.random()*10007), Number(document.getElementById('countSelect').value), e.target.value);
+  });
+
+ 
+  buildChallenge(Math.floor(Math.random()*1000000), Number(document.getElementById('countSelect').value), document.getElementById('difficultySelect').value);
+
+})();
+</script>
+</body>
+</html>

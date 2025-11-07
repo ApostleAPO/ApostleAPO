@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Scala 40 - Single File (HTML + CSS + JS)</title>
+<style>
+  :root{--bg:#0b1220;--card:#fff;--accent:#2bd;--muted:#9aa}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+  body{background:linear-gradient(180deg,#081226 0%, #071019 60%);color:#eaf2ff;display:flex;flex-direction:column;align-items:center;padding:18px}
+  header{width:100%;max-width:1100px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  h1{font-size:20px;margin:0}
+  main{width:100%;max-width:1100px;margin-top:14px;display:grid;grid-template-columns:1fr 320px;gap:12px}
+  .board{background:rgba(255,255,255,0.03);border-radius:12px;padding:12px;min-height:520px}
+  .sidebar{background:rgba(255,255,255,0.02);padding:12px;border-radius:12px}
+  .hand{display:flex;gap:6px;flex-wrap:wrap;padding:8px}
+  .card{width:68px;height:96px;border-radius:8px;background:var(--card);color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.5);cursor:pointer;user-select:none}
+  .card.small{width:44px;height:62px;font-size:12px}
+  .card .pips{font-size:18px}
+  .deck-area{display:flex;gap:12px;align-items:center}
+  .pile{width:72px;height:102px;border-radius:10px;background:linear-gradient(180deg,#0a1220,#0f2030);display:flex;align-items:center;justify-content:center;color:#9ab;border:2px solid rgba(255,255,255,0.03)}
+  button{background:var(--accent);border:none;color:#022;padding:8px 10px;border-radius:8px;font-weight:700;cursor:pointer}
+  .log{height:220px;overflow:auto;background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;color:var(--muted);font-size:13px}
+  .melds{display:flex;gap:8px;flex-wrap:wrap;padding:8px}
+  .meld{background:rgba(255,255,255,0.03);padding:6px;border-radius:8px;display:flex;gap:6px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .smallmuted{color:var(--muted);font-size:13px}
+  footer{margin-top:12px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Scala 40 — Single-file demo</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <label class="smallmuted">Modalità:</label>
+    <select id="mode">
+      <option value="local">Locale (2 giocatori: Tu vs CPU)</option>
+      <option value="online">Online (WebSocket)</option>
+    </select>
+    <button id="newGame">Nuova partita</button>
+  </div>
+</header>
+<main>
+  <section class="board" id="board">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="deck-area">
+        <div class="pile" id="deckPile">Mazzo</div>
+        <div class="pile" id="discardPile">Scarti</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-left:12px">
+          <div class="smallmuted">Giocatori:</div>
+          <div id="playersList" class="smallmuted">—</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="smallmuted">DB:</div>
+        <input id="dbName" value="my_buius" style="padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
+        <button id="connectBtn">Connetti</button>
+      </div>
+    </div>
+
+    <hr style="opacity:0.06;margin:12px 0" />
+
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div class="smallmuted">Melds sul tavolo:</div>
+        <div id="tableMelds" class="melds"></div>
+
+        <div style="height:12px"></div>
+
+        <div class="smallmuted">Tuo turno: <span id="turnIndicator">—</span></div>
+
+        <div style="height:12px"></div>
+
+        <div class="smallmuted">La tua mano:</div>
+        <div id="playerHand" class="hand"></div>
+
+        <div style="height:8px"></div>
+        <div class="controls">
+          <button id="drawBtn">Pesca</button>
+          <button id="discardBtn">Scarta</button>
+          <button id="meldBtn">Meld</button>
+          <button id="layoffBtn">Aggiungi a Meld</button>
+        </div>
+      </div>
+      <aside class="sidebar">
+        <div class="smallmuted">Log</div>
+        <div id="log" class="log"></div>
+        <div style="height:8px"></div>
+        <div class="smallmuted">Stato partita</div>
+        <pre id="stateDump" style="font-size:12px;color:var(--muted);white-space:pre-wrap"></pre>
+      </aside>
+    </div>
+  </section>
+  <section style="display:flex;flex-direction:column;gap:10px">
+    <div class="board" style="width:300px">
+      <div class="smallmuted">Impostazioni/Info</div>
+      <p style="font-size:13px">Regole semplificate del demo: pesca -> (opzionale) chiudi/gioca meld -> scarta. Valori: A=1, J=11,Q=12,K=13. Scala 40 reale ha regole molto più ricche (vincoli sui primi 40 punti, ecc.).</p>
+      <p style="font-size:13px">Per giocare online è richiesto un server WebSocket che sincronizzi gli stati. Nella pagina è incluso un client WebSocket che usa il parametro DB come nome della stanza (campo: <code>dbName</code>).</p>
+    </div>
+  </section>
+</main>
+<footer>Creata da ChatGPT — demo. Salva questa pagina come <code>scala40.html</code> e aprila nel browser.</footer>
+
+<script>
+// ---------- LOGICA DI GIOCO (semplificata) ----------
+const RANKS = [1,2,3,4,5,6,7,8,9,10,11,12,13]; // A...K
+const SUITS = ['♠','♥','♦','♣'];
+
+function makeDeck(){
+  const d = [];
+  for(const s of SUITS) for(const r of RANKS) d.push({rank:r,suit:s,id: s+""+r});
+  // Scala 40 usa 2 mazzi a volte; questo demo usa 1 mazzo per semplicità
+  return shuffle(d);
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+// Game state
+let state = {
+  deck: [],
+  discard: [],
+  tableMelds: [],
+  players: [],
+  turn: 0,
+  mode: 'local',
+  clientId: null
+};
+
+function newGame(mode='local'){
+  state.deck = makeDeck();
+  state.discard = [];
+  state.tableMelds = [];
+  state.mode = mode;
+  state.players = [];
+  // Supporto a 2 giocatori: 0 = human, 1 = cpu or remote
+  state.players.push({id:'p0',name:'Tu',hand:[],score:0});
+  state.players.push({id:'p1',name:(mode==='local'?'CPU':'Remote'),hand:[],score:0});
+  // Deal 13 cards each (scala 40 usa 13 iniziali in molte varianti)
+  for(let i=0;i<13;i++){
+    state.players.forEach(p=>p.hand.push(drawCard()));
+  }
+  state.discard.push(drawCard());
+  state.turn = 0; // tu inizi
+  ui.refresh();
+  log('Nuova partita avviata — modalità: '+mode);
+}
+
+function drawCard(){
+  if(state.deck.length===0){
+    // reshuffle discards except top
+    if(state.discard.length<=1) return null;
+    const top = state.discard.pop();
+    state.deck = shuffle(state.discard.splice(0));
+    state.discard = [top];
+  }
+  return state.deck.pop();
+}
+
+// Basic meld detection (sets of same rank or runs same suit) — used only for UI assistance
+function isValidMeld(cards){
+  if(cards.length<3) return false;
+  // all same rank -> set
+  const ranks = cards.map(c=>c.rank);
+  const suits = cards.map(c=>c.suit);
+  const allSameRank = ranks.every(r=>r===ranks[0]);
+  if(allSameRank) return true;
+  // run: same suit and consecutive ranks
+  const allSameSuit = suits.every(s=>s===suits[0]);
+  if(!allSameSuit) return false;
+  const sorted = cards.slice().sort((a,b)=>a.rank-b.rank);
+  for(let i=1;i<sorted.length;i++){ if(sorted[i].rank !== sorted[i-1].rank+1) return false }
+  return true;
+}
+
+// UI helpers
+const ui = {
+  playerHandEl: document.getElementById('playerHand'),
+  tableMeldsEl: document.getElementById('tableMelds'),
+  deckPileEl: document.getElementById('deckPile'),
+  discardPileEl: document.getElementById('discardPile'),
+  logEl: document.getElementById('log'),
+  turnInd: document.getElementById('turnIndicator'),
+  playersList: document.getElementById('playersList'),
+  stateDump: document.getElementById('stateDump'),
+  refresh(){
+    // players list
+    ui.playersList.textContent = state.players.map((p,i)=>`${p.name}${state.turn===i?' ←':' '}`).join('\n');
+    ui.turnInd.textContent = state.players[state.turn].name;
+    // hand
+    ui.playerHandEl.innerHTML = '';
+    const me = state.players[0];
+    me.hand.forEach((c,idx)=>{
+      const card = document.createElement('div'); card.className='card'; card.dataset.idx=idx; card.draggable=true;
+      card.innerHTML = `<div class="pips">${c.suit}</div><div style="font-size:14px">${rankName(c.rank)}</div>`;
+      card.addEventListener('click',()=>selectCard(idx));
+      card.addEventListener('dragstart', e=>{e.dataTransfer.setData('text/plain',idx)});
+      ui.playerHandEl.appendChild(card);
+    });
+
+    // table melds
+    ui.tableMeldsEl.innerHTML='';
+    state.tableMelds.forEach((m,i)=>{
+      const el = document.createElement('div'); el.className='meld'; el.dataset.meld=i;
+      m.forEach(c=>{ const cd = document.createElement('div'); cd.className='card small'; cd.innerHTML=`<div class="pips">${c.suit}</div><div style="font-size:12px">${rankName(c.rank)}</div>`; el.appendChild(cd);});
+      ui.tableMeldsEl.appendChild(el);
+    });
+
+    ui.deckPileEl.textContent = `Mazzo\n(${state.deck.length})`;
+    ui.discardPileEl.textContent = state.discard.length? `${state.discard[state.discard.length-1].suit} ${rankName(state.discard[state.discard.length-1].rank)}` : 'Scarti';
+    ui.stateDump.textContent = JSON.stringify(state, null, 2);
+  }
+};
+
+function rankName(r){ if(r===1) return 'A'; if(r===11) return 'J'; if(r===12) return 'Q'; if(r===13) return 'K'; return ''+r }
+
+function log(...t){ ui.logEl.innerText = (new Date()).toLocaleTimeString() + ' — ' + t.join(' ') + '\n' + ui.logEl.innerText }
+
+// Interaction
+let selected = [];
+function selectCard(idx){
+  const exists = selected.indexOf(idx);
+  if(exists===-1) selected.push(idx); else selected.splice(exists,1);
+  // visual
+  [...ui.playerHandEl.children].forEach((el,i)=>el.style.outline = selected.includes(i)?'3px solid rgba(43,189,221,0.6)':'' )
+}
+
+document.getElementById('drawBtn').addEventListener('click', ()=>{
+  if(state.turn!==0) { log('Non è il tuo turno'); return }
+  const c = drawCard();
+  if(!c){ log('Nessuna carta disponibile'); return }
+  state.players[0].hand.push(c);
+  log('Hai pescato', c.suit, rankName(c.rank));
+  ui.refresh();
+});
+
+document.getElementById('discardBtn').addEventListener('click', ()=>{
+  if(state.turn!==0){ log('Non è il tuo turno'); return }
+  if(selected.length!==1){ log('Seleziona una carta da scartare'); return }
+  const idx = selected[0]; selected = [];
+  const card = state.players[0].hand.splice(idx,1)[0];
+  state.discard.push(card);
+  log('Hai scartato',card.suit,rankName(card.rank));
+  endTurn();
+});
+
+document.getElementById('meldBtn').addEventListener('click', ()=>{
+  if(state.turn!==0){ log('Non è il tuo turno'); return }
+  if(selected.length<3){ log('Seleziona almeno 3 carte per creare un meld'); return }
+  const cards = selected.sort((a,b)=>a-b).map(i=>state.players[0].hand[i]);
+  if(!isValidMeld(cards)){ log('Meld non valido'); return }
+  // remove by descending index
+  selected.sort((a,b)=>b-a).forEach(i=>state.players[0].hand.splice(i,1));
+  state.tableMelds.push(cards);
+  selected = [];
+  log('Hai messo un meld');
+  ui.refresh();
+});
+
+document.getElementById('layoffBtn').addEventListener('click', ()=>{
+  // add selected card to existing meld if valid
+  if(state.turn!==0){ log('Non è il tuo turno'); return }
+  if(selected.length!==1){ log('Seleziona esattamente una carta da aggiungere'); return }
+  const card = state.players[0].hand[selected[0]];
+  // try each meld
+  for(let i=0;i<state.tableMelds.length;i++){
+    const meld = state.tableMelds[i].slice();
+    meld.push(card);
+    if(isValidMeld(meld)){
+      // remove card from hand and push to meld
+      state.players[0].hand.splice(selected[0],1);
+      state.tableMelds[i].push(card);
+      selected = [];
+      log('Hai aggiunto carta a meld'); ui.refresh(); return
+    }
+  }
+  log('Non puoi aggiungere la carta ai meld esistenti');
+});
+
+function endTurn(){
+  // check win
+  if(state.players[0].hand.length===0){ log('Hai fatto Scala 40!'); ui.refresh(); return }
+  // cpu or remote
+  state.turn = (state.turn+1)%state.players.length;
+  ui.refresh();
+  if(state.mode==='local' && state.turn===1) setTimeout(cpuTurn,800);
+  if(state.mode==='online') sendAction({type:'endTurn'});
+}
+
+function cpuTurn(){
+  const p = state.players[1];
+  // simple cpu: pesca e scarta random
+  const c = drawCard(); if(c) p.hand.push(c);
+  // if can meld, do it randomly
+  // naive: try to find any 3-of-a-kind
+  const byRank = {};
+  p.hand.forEach((c,i)=>{ byRank[c.rank] = byRank[c.rank]||[]; byRank[c.rank].push({c,i}); });
+  for(const r in byRank){ if(byRank[r].length>=3){ const cards = byRank[r].slice(0,3).map(x=>x.c); // remove by matching ids
+      cards.forEach(card=>{ const idx = p.hand.findIndex(h=>h.id===card.id); if(idx>=0) p.hand.splice(idx,1) }); state.tableMelds.push(cards); log('CPU ha fatto un meld'); ui.refresh(); }
+  }
+  // discard random
+  const di = Math.floor(Math.random()*p.hand.length);
+  const card = p.hand.splice(di,1)[0]; state.discard.push(card); log('CPU scarta',card.suit,rankName(card.rank));
+  // back to player
+  state.turn = 0; ui.refresh();
+}
+
+// ---------- ONLINE (WebSocket) CLIENT (semplice) ----------
+let ws = null;
+const connectBtn = document.getElementById('connectBtn');
+connectBtn.addEventListener('click', ()=>{
+  const mode = document.getElementById('mode').value;
+  if(mode!=='online'){ alert('Imposta modalità Online nel selettore in alto'); return }
+  const db = document.getElementById('dbName').value || 'my_buius';
+  connectToServer(db);
+});
+
+document.getElementById('mode').addEventListener('change', e=>{
+  if(e.target.value==='local') newGame('local'); else newGame('online');
+});
+
+document.getElementById('newGame').addEventListener('click', ()=> newGame(document.getElementById('mode').value));
+
+function connectToServer(dbName){
+  if(ws){ ws.close(); ws=null }
+  // **Client WebSocket**: si aspetta un server sullo stesso host: ws://localhost:8080
+  // la query ?db=nome verrà usata dal server per collegarsi al DB/my_buius oppure per usare il nome stanza
+  const url = (location.protocol==='https:'? 'wss://' : 'ws://') + location.hostname + ':8080/?db=' + encodeURIComponent(dbName);
+  log('Connessione a', url);
+  ws = new WebSocket(url);
+  ws.addEventListener('open', ()=>{ log('WebSocket connesso — DB:', dbName); });
+  ws.addEventListener('message', ev=>{
+    try{ const msg = JSON.parse(ev.data); handleServerMessage(msg); }catch(e){ console.error(e) }
+  });
+  ws.addEventListener('close', ()=>{ log('WebSocket chiuso'); });
+}
+
+function sendAction(action){
+  if(!ws || ws.readyState!==1){ log('Non connesso al server'); return }
+  ws.send(JSON.stringify({type:'action',payload:action}));
+}
+
+function handleServerMessage(msg){
+  if(msg.type==='state'){ state = msg.state; ui.refresh(); log('Stato ricevuto dal server'); }
+  if(msg.type==='info'){ log('Info server:', msg.text); }
+}
+
+// ---------- bootstrap ----------
+newGame('local');
+
+</script>
+</body>
+</html>
