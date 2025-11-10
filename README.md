@@ -7,7 +7,6 @@
 <p align="left"> <img src="https://komarev.com/ghpvc/?username=apostleapo&label=Profile%20views&color=b3197a&style=plastic" alt="apostleapo" /> </p>
 
 
-
 <p align="left"> <a href="https://github.com/ryo-ma/github-profile-trophy"><img src="https://github-profile-trophy.vercel.app/?username=apostleapo" alt="apostleapo" /></a> </p>
 
 <h3 align="left">Languages and Tools:</h3>
